@@ -1,0 +1,10 @@
+[project]
+name = "astra-owain-take-home"
+version = "0.1.0"
+description = "Take-home assignment for Owain Evans' Astra stream."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "inspect_ai",
+    "openai>=2.6.0",
+]
