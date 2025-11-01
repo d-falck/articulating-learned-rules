@@ -1,16 +1,15 @@
 """
-Generate a classification dataset.
+Generate isolated classification datasets.
 
-Creates paragraphs about various topics following different combinations of rules.
-Each sample includes ground truth labels for various binary classification tasks.
+For each classification rule, creates a separate dataset with only that rule varying.
+This makes patterns much easier to identify in few-shot learning.
 
 Usage:
-    python src/generate_classification_dataset.py --model anthropic/claude-3-5-sonnet-20241022
-    python src/generate_classification_dataset.py --model openai/gpt-4
+    python src/astra/generate_isolated_datasets.py --model anthropic/claude-3-5-sonnet-20241022
+    python src/astra/generate_isolated_datasets.py --num-samples 500
 """
 
 import argparse
-import itertools
 import json
 import random
 from pathlib import Path
@@ -94,7 +93,7 @@ RULES = {
 }
 
 
-OUTPUT_FILE = "artifacts/datasets/classification_dataset.jsonl"
+OUTPUT_DIR = "artifacts/datasets/isolated"
 MAX_CONCURRENCY = 100
 LOG_DIR = "artifacts/logs"
 
@@ -103,43 +102,21 @@ load_dotenv()
 random.seed(42)
 
 
-def generate_rule_combinations(num_samples):
-    """Generate all possible rule combinations and sample num_samples of them."""
-    rule_names = list(RULES.keys())
-    all_combinations = list(itertools.product([True, False], repeat=len(rule_names)))
+def create_prompt(topic, rule_name, rule_value):
+    """Create a prompt for generating text following a specific rule."""
+    instruction = RULES[rule_name]["true" if rule_value else "false"]
 
-    # Sample num_samples combinations (with replacement if needed)
-    if num_samples <= len(all_combinations):
-        # Sample without replacement when we have enough unique combinations
-        selected = random.sample(all_combinations, num_samples)
-    else:
-        # Sample with replacement when we need more than the unique combinations
-        selected = random.choices(all_combinations, k=num_samples)
+    prompt = [
+        f"Topic: {topic}",
+        "",
+        "Requirement:",
+        f"- {instruction}",
+        "",
+        "Generate a single sentence about this topic following the requirement above. "
+        "Adjust the length and complexity as needed to meet the requirement.",
+    ]
 
-    # Convert to list of dicts
-    combinations = []
-    for combo in selected:
-        combo_dict = dict(zip(rule_names, combo))
-        combinations.append(combo_dict)
-
-    return combinations
-
-
-def create_prompt(topic, rules_dict):
-    """Create a prompt instructing the model to generate text following specific rules."""
-    instructions = [f"Topic: {topic}", "", "Requirements:"]
-
-    for rule_name, rule_value in rules_dict.items():
-        instruction = RULES[rule_name]["true" if rule_value else "false"]
-        instructions.append(f"- {instruction}")
-
-    instructions.append("")
-    instructions.append(
-        "Generate a single sentence about this topic following ALL the requirements above. "
-        "Adjust the length and complexity as needed to meet the requirements."
-    )
-
-    return "\n".join(instructions)
+    return "\n".join(prompt)
 
 
 @solver
@@ -151,13 +128,13 @@ def self_check():
     async def solve(state, generate):
         # Build the self-check prompt
         check_prompt = (
-            "Review your previous response and check if it follows ALL the requirements.\n\n"
+            "Review your previous response and check if it follows the requirement.\n\n"
             "Important: DO NOT explain your reasoning or show your work. "
             "DO NOT include phrases like 'Let me check' or 'Corrected version:'. "
-            "ONLY output the final sentence(s) and nothing else.\n\n"
-            "If your response satisfies all requirements, output the exact same text. "
-            "If it doesn't, output ONLY the corrected sentence(s).\n\n"
-            "Output format: Just the sentence(s), no explanations."
+            "ONLY output the final sentence and nothing else.\n\n"
+            "If your response satisfies the requirement, output the exact same text. "
+            "If it doesn't, output ONLY the corrected sentence.\n\n"
+            "Output format: Just the sentence, no explanations."
         )
 
         # Append the check prompt to the conversation using ChatMessageUser
@@ -170,63 +147,86 @@ def self_check():
 
 
 @task
-def generate_classification_dataset(num_samples):
-    """Generate dataset with short sentences following various rule combinations."""
-
-    combinations = generate_rule_combinations(num_samples)
+def generate_isolated_dataset(rule_name, num_samples_per_class):
+    """Generate dataset for a single classification rule."""
 
     samples = []
-    for combo in combinations:
-        topic = random.choice(TOPICS)
-        prompt = create_prompt(topic, combo)
 
-        # Store the ground truth labels in metadata
-        sample = Sample(input=prompt, metadata=combo)
+    # Generate positive examples (rule=True)
+    for _ in range(num_samples_per_class):
+        topic = random.choice(TOPICS)
+        prompt = create_prompt(topic, rule_name, True)
+        sample = Sample(
+            input=prompt, metadata={"rule": rule_name, "label": True, "topic": topic}
+        )
         samples.append(sample)
+
+    # Generate negative examples (rule=False)
+    for _ in range(num_samples_per_class):
+        topic = random.choice(TOPICS)
+        prompt = create_prompt(topic, rule_name, False)
+        sample = Sample(
+            input=prompt, metadata={"rule": rule_name, "label": False, "topic": topic}
+        )
+        samples.append(sample)
+
+    # Shuffle to mix positive and negative
+    random.shuffle(samples)
 
     return Task(
         dataset=MemoryDataset(samples),
         solver=[
             system_message(
                 "You are a helpful assistant that generates single sentences following specific constraints. "
-                "Follow the given requirements EXACTLY. Pay special attention to:\n"
-                "- Verb count: Count carefully. Common verbs include 'is', 'are', 'was', 'has', 'does', 'runs', 'makes', etc.\n"
-                "- Word count: Count the total number of words in your sentence.\n"
-                "Read the requirements carefully and follow them precisely."
+                "Follow the given requirement EXACTLY. "
+                "Read the requirement carefully and follow it precisely."
             ),
             generate(),
             self_check(),
         ],
+        name=f"isolated_{rule_name}",
     )
 
 
-def save_dataset_from_log(log):
+def save_dataset_from_log(log, rule_name):
     """Extract results from Inspect eval log and save to JSONL."""
     output_data = []
     for sample in log.samples:
-        # Get the last generated text (after self-check correction)
-        # sample.output.completion contains the final response
+        # Get the generated text (after self-check correction)
         text = sample.output.completion
 
-        # Get ground truth labels from metadata
-        labels = sample.metadata
+        # Get metadata
+        metadata = sample.metadata
 
-        # Create output record
-        record = {"text": text, **labels}
+        # Create output record with only the rule we're testing
+        record = {
+            "text": text,
+            rule_name: metadata["label"],  # Only include this rule's label
+            "topic": metadata.get("topic", "unknown"),
+        }
         output_data.append(record)
 
     # Save to JSONL
-    output_path = Path(OUTPUT_FILE)
-    with output_path.open("w") as f:
+    output_dir = Path(OUTPUT_DIR)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / f"{rule_name}_dataset.jsonl"
+
+    with output_file.open("w") as f:
         for record in output_data:
             f.write(json.dumps(record) + "\n")
 
-    print(f"\nDataset saved to {OUTPUT_FILE}")
-    print(f"Total samples: {len(output_data)}")
+    print(f"  Saved {len(output_data)} samples to {output_file}")
+
+    # Print label distribution
+    true_count = sum(1 for r in output_data if r[rule_name] is True)
+    false_count = sum(1 for r in output_data if r[rule_name] is False)
+    print(f"  Distribution: {true_count} true, {false_count} false")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Generate classification dataset")
+    parser = argparse.ArgumentParser(
+        description="Generate isolated classification datasets"
+    )
     parser.add_argument(
         "--model",
         type=str,
@@ -236,26 +236,44 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num-samples",
         type=int,
-        default=1000,
-        help="Number of samples to generate (default: 2000)",
+        default=500,
+        help="Total number of samples per rule (default: 500, split 250/250)",
+    )
+    parser.add_argument(
+        "--rules",
+        nargs="+",
+        default=None,
+        help="Specific rules to generate (default: all rules)",
     )
     args = parser.parse_args()
 
-    print(f"Generating dataset with model: {args.model}")
-    print(f"This will create {args.num_samples} samples...")
+    # Determine which rules to generate
+    rules_to_generate = args.rules if args.rules else list(RULES.keys())
+    num_samples_per_class = args.num_samples // 2
 
-    # Run the evaluation with higher concurrency
-    logs = eval(
-        generate_classification_dataset(args.num_samples),
-        model=args.model,
-        log_dir=LOG_DIR,
-        max_connections=MAX_CONCURRENCY,
+    print(f"Generating isolated datasets with model: {args.model}")
+    print(f"Rules to generate: {', '.join(rules_to_generate)}")
+    print(
+        f"Samples per rule: {args.num_samples} ({num_samples_per_class} positive, {num_samples_per_class} negative)"
     )
+    print()
 
-    # logs is a list of EvalLog objects (one per task)
-    log = logs[0]
+    # Generate dataset for each rule
+    for rule_name in rules_to_generate:
+        print(f"Generating dataset for rule: {rule_name}")
 
-    # Save the dataset
-    print(f"\nEvaluation complete!")
-    print(f"Log saved to: {log.location}")
-    save_dataset_from_log(log)
+        # Run the evaluation
+        logs = eval(
+            generate_isolated_dataset(rule_name, num_samples_per_class),
+            model=args.model,
+            log_dir=LOG_DIR,
+            max_connections=MAX_CONCURRENCY,
+        )
+
+        # Save the dataset
+        log = logs[0]
+        print(f"  Log saved to: {log.location}")
+        save_dataset_from_log(log, rule_name)
+        print()
+
+    print(f"All datasets saved to: {OUTPUT_DIR}")

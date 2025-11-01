@@ -7,16 +7,16 @@
 
 python src/astra/evaluate_icl.py \
   --rules \
-    contains_questions \
-    contains_exclamations \
-    contains_commas \
+    ends_with_question \
     contains_numbers \
-    starts_with_the \
-    all_lowercase \
+    is_title_case \
     contains_quotes \
-    contains_and \
-    ends_with_period \
-    contains_verb \
-  --models openai/gpt-5-mini \
-  --n-shot 20 \
+    has_many_verbs \
+    contains_hashtag \
+    is_very_short \
+    is_first_person \
+    has_repeated_word \
+    contains_rhyme \
+  --models openai/gpt-4.1-2025-04-14 \
+  --n-shot 50 \
   --max-tasks 10

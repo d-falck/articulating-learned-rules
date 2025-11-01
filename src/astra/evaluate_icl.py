@@ -22,7 +22,7 @@ from inspect_ai.solver import generate, system_message
 from inspect_ai.model import GenerateConfig
 
 
-DATASET_FILE = "artifacts/datasets/classification_dataset.jsonl"
+DATASET_DIR = "artifacts/datasets/isolated"
 N_TEST = 100  # Number of test samples
 LOG_DIR = "./artifacts/logs"
 MAX_CONNECTIONS = 500
@@ -32,8 +32,9 @@ load_dotenv()
 random.seed(42)
 
 
-def load_classification_dataset(dataset_path):
-    """Load the dataset from JSONL file using HuggingFace datasets."""
+def load_classification_dataset(rule):
+    """Load the isolated dataset for a specific rule from JSONL file."""
+    dataset_path = f"{DATASET_DIR}/{rule}_dataset.jsonl"
     dataset = load_dataset("json", data_files=dataset_path, split="train")
     return list(dataset)
 
@@ -141,9 +142,9 @@ def exact_match():
 @task
 def evaluate_icl_task(rule, n_shot):
     """Evaluate in-context learning for a specific classification rule."""
-    # Load dataset
-    dataset = load_classification_dataset(DATASET_FILE)
-    print(f"Loaded {len(dataset)} samples from dataset")
+    # Load isolated dataset for this rule
+    dataset = load_classification_dataset(rule)
+    print(f"Loaded {len(dataset)} samples from {rule}_dataset.jsonl")
 
     # Create evaluation samples
     samples = create_evaluation_samples(dataset, rule, n_shot, N_TEST)
@@ -232,9 +233,12 @@ if __name__ == "__main__":
         model = log.eval.model
 
         if log.results and log.results.scores:
-            acc = next((s for s in log.results.scores if s.name == "accuracy"), None)
-            if acc:
-                print(f"{model:40s} | {task_name:30s} | {acc.value:.2%}")
+            # Scores are EvalScore objects with metrics inside
+            for score in log.results.scores:
+                if hasattr(score, 'metrics') and 'accuracy' in score.metrics:
+                    acc_metric = score.metrics['accuracy']
+                    print(f"{model:40s} | {task_name:30s} | {acc_metric.value:.2%}")
+                    break
 
     print(f"\n{'='*80}")
     print(f"All logs saved to: {LOG_DIR}")
