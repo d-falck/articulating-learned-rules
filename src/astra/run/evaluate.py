@@ -83,21 +83,17 @@ def split_dataset(dataset, rule, n_test):
     Returns:
         (train_dataset, test_dataset) tuple
     """
-    # Split by label to ensure stratified split
     true_examples = [ex for ex in dataset if ex[rule] is True]
     false_examples = [ex for ex in dataset if ex[rule] is False]
 
-    # Shuffle each class
     random.shuffle(true_examples)
     random.shuffle(false_examples)
 
-    # Split test set evenly from each class
     n_test_per_class = n_test // 2
 
     train_dataset = true_examples[n_test_per_class:] + false_examples[n_test_per_class:]
     test_dataset = true_examples[:n_test_per_class] + false_examples[:n_test_per_class]
 
-    # Shuffle train and test sets
     random.shuffle(train_dataset)
     random.shuffle(test_dataset)
 
@@ -111,7 +107,6 @@ def create_few_shot_prompt(rule, examples, test_text):
         "",
     ]
 
-    # Add few-shot examples
     for example in examples:
         text = example["text"]
         label = str(example[rule]).lower()
@@ -119,7 +114,6 @@ def create_few_shot_prompt(rule, examples, test_text):
         prompt_parts.append(f"Answer: {label}")
         prompt_parts.append("")
 
-    # Add the test case
     prompt_parts.append(f"Text: {test_text}")
     prompt_parts.append("Answer:")
 
@@ -137,14 +131,12 @@ def create_evaluation_samples(train_dataset, test_dataset, rule, n_shot, articul
         n_shot: Number of few-shot examples per class (total examples = 2 * n_shot)
         articulation_type: "none", "multi", or "free"
     """
-    # Split train dataset by label for sampling few-shot examples
     train_true = [ex for ex in train_dataset if ex[rule] is True]
     train_false = [ex for ex in train_dataset if ex[rule] is False]
 
     print(f"Train dataset: {len(train_true)} true, {len(train_false)} false")
     print(f"Test dataset: {len(test_dataset)} samples")
 
-    # Generate multiple choice options once for all samples in this task
     mc_options = None
     mc_correct_answer = None
     if articulation_type == "multi":
@@ -152,34 +144,27 @@ def create_evaluation_samples(train_dataset, test_dataset, rule, n_shot, articul
 
     samples = []
 
-    # Use each test example once
     for test_example in test_dataset:
-        # Sample n examples from each class in the training set
         true_samples = random.sample(train_true, n_shot)
         false_samples = random.sample(train_false, n_shot)
 
-        # Combine and randomize the order
         few_shot_examples = true_samples + false_samples
         random.shuffle(few_shot_examples)
 
-        # Create prompt
         prompt = create_few_shot_prompt(rule, few_shot_examples, test_example["text"])
 
-        # Build metadata
         metadata = {
             "rule": rule,
             "n_shot": n_shot,
             "total_examples": 2 * n_shot,
             "true_label": test_example[rule],
-            "rule_description": RULES[rule].description,  # For articulation grading
+            "rule_description": RULES[rule].description,
         }
 
-        # Add multiple choice metadata if applicable
         if articulation_type == "multi":
             metadata["mc_options"] = mc_options
             metadata["mc_correct_answer"] = mc_correct_answer
 
-        # Create sample with the ground truth label as target
         sample = Sample(
             input=prompt,
             target=str(test_example[rule]).lower(),
@@ -193,21 +178,17 @@ def create_evaluation_samples(train_dataset, test_dataset, rule, n_shot, articul
 @task
 def evaluate_icl_task(rule, n_shot, n_test, articulation_type="none"):
     """Evaluate in-context learning for a specific classification rule with optional articulation."""
-    # Load isolated dataset for this rule
     dataset = load_classification_dataset(rule)
     print(f"Loaded {len(dataset)} samples from {rule}_dataset.jsonl")
 
-    # Split into train and test sets
     train_dataset, test_dataset = split_dataset(dataset, rule, n_test)
     print(f"Split into {len(train_dataset)} train and {len(test_dataset)} test samples")
 
-    # Create evaluation samples with articulation metadata
     samples = create_evaluation_samples(train_dataset, test_dataset, rule, n_shot, articulation_type)
     print(
         f"Created {len(samples)} test samples with {2 * n_shot} few-shot examples ({n_shot} per class)"
     )
 
-    # Build solver chain
     solvers = [
         system_message(
             "You are a helpful assistant that classifies text. "
@@ -218,22 +199,15 @@ def evaluate_icl_task(rule, n_shot, n_test, articulation_type="none"):
         ),
     ]
 
-    # Add articulation solver if enabled
     if articulation_type in ["multi", "free"]:
-        # Get MC options from first sample (all samples have same options structure)
         mc_opts = samples[0].metadata.get("mc_options") if articulation_type == "multi" else None
         solvers.append(articulate_rule(articulation_type, mc_opts))
 
-    # Build scorers - always score classification accuracy
-    # Use custom scorer that extracts the first assistant message
     scorers = [classification_accuracy()]
 
-    # Add articulation scorer if enabled
     if articulation_type == "multi":
-        # For multiple choice, score the articulation response
         scorers.append(articulation_choice_accuracy())
     elif articulation_type == "free":
-        # For free-form, use model grading against rule description
         scorers.append(articulation_quality())
 
     return Task(
@@ -277,10 +251,8 @@ class Config(BaseConfig):
 
 def main(config: Config):
     """Run ICL evaluation with the given configuration."""
-    # Set random seed once
     random.seed(config.seed)
 
-    # Handle "all" keyword for rules
     if "all" in config.rules:
         rules_to_evaluate = list(RULES.keys())
     else:
@@ -296,13 +268,11 @@ def main(config: Config):
     print(f"Total evaluations: {len(rules_to_evaluate) * len(config.models) * len(config.n_shot)}")
     print()
 
-    # Create task configurations for all parameter combinations
     tasks = []
     for rule in rules_to_evaluate:
         for n_shot in config.n_shot:
             tasks.append(evaluate_icl_task(rule, n_shot, config.n_test, config.articulation))
 
-    # Run evaluations across all models and tasks
     logs = eval(
         tasks,
         model=config.models,
@@ -311,7 +281,6 @@ def main(config: Config):
         max_tasks=config.max_tasks,
     )
 
-    # Print summary
     print(f"\n{'='*80}")
     print("SUMMARY RESULTS")
     print(f"{'='*80}")
@@ -321,7 +290,6 @@ def main(config: Config):
         model = log.eval.model
 
         if log.results and log.results.scores:
-            # Scores are EvalScore objects with metrics inside
             for score in log.results.scores:
                 if hasattr(score, 'metrics') and 'accuracy' in score.metrics:
                     acc_metric = score.metrics['accuracy']
