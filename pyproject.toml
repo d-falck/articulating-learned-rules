@@ -8,4 +8,5 @@ dependencies = [
     "datasets>=4.2.0",
     "inspect_ai",
     "openai>=2.6.0",
+    "python-confetti",
 ]

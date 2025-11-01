@@ -194,6 +194,7 @@ dependencies = [
     { name = "datasets" },
     { name = "inspect-ai" },
     { name = "openai" },
+    { name = "python-confetti" },
 ]
 
 [package.metadata]
@@ -201,6 +202,7 @@ requires-dist = [
     { name = "datasets", specifier = ">=4.2.0" },
     { name = "inspect-ai" },
     { name = "openai", specifier = ">=2.6.0" },
+    { name = "python-confetti" },
 ]
 
 [[package]]
@@ -1505,12 +1507,40 @@ wheels = [
 ]
 
 [[package]]
+name = "pydantic-settings"
+version = "2.11.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "typing-inspection" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/20/c5/dbbc27b814c71676593d1c3f718e6cd7d4f00652cefa24b75f7aa3efb25e/pydantic_settings-2.11.0.tar.gz", hash = "sha256:d0e87a1c7d33593beb7194adb8470fc426e95ba02af83a0f23474a04c9a08180", size = 188394, upload-time = "2025-09-24T14:19:11.764Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/d6/887a1ff844e64aa823fb4905978d882a633cfe295c32eacad582b78a7d8b/pydantic_settings-2.11.0-py3-none-any.whl", hash = "sha256:fe2cea3413b9530d10f3a5875adffb17ada5c1e1bab0b2885546d7310415207c", size = 48608, upload-time = "2025-09-24T14:19:10.015Z" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.19.2"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b0/77/a5b8c569bf593b0140bde72ea885a803b82086995367bf2037de0159d924/pygments-2.19.2.tar.gz", hash = "sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887", size = 4968631, upload-time = "2025-06-21T13:39:12.283Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b", size = 1225217, upload-time = "2025-06-21T13:39:07.939Z" },
+]
+
+[[package]]
+name = "python-confetti"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cd/1e/00c93dac461cfcc6e60a1ea8282039b5df222789fcb0df16b609606494c4/python_confetti-0.1.0.tar.gz", hash = "sha256:5ba40645fb65f3f3e2eab8013cc7be16e65523f85266ce7760906086ce686286", size = 1518, upload-time = "2025-08-17T10:28:02.994Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/93/0c/75ffa1cdaa9ba8f2f4058f6d55f1096375f6750c896ea3f9751c0a78294a/python_confetti-0.1.0-py3-none-any.whl", hash = "sha256:4906110620bc01f10c1fe944a53fcc1ddd2b6c6d8469a10dae0a96d1c6862d08", size = 1835, upload-time = "2025-08-17T10:28:02.159Z" },
 ]
 
 [[package]]
