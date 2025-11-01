@@ -1,12 +1,13 @@
 """
 Evaluate in-context learning performance on classification tasks.
 
-For a given classification rule, samples n few-shot examples from the dataset
-and evaluates how well a model can predict labels for test samples.
+For given classification rules, samples n few-shot examples from the dataset
+and evaluates how well models can predict labels for test samples.
 
 Usage:
-    python src/astra/evaluate_icl.py --rule contains_commas
-    python src/astra/evaluate_icl.py --rule sentence_count_multiple
+    python src/astra/evaluate_icl.py --rules contains_commas --models openrouter/anthropic/claude-sonnet-4.5 --n-shot 10
+    python src/astra/evaluate_icl.py --rules contains_commas contains_and --models openai/gpt-4 --n-shot 5 10
+    python src/astra/evaluate_icl.py --rules all --models model1 model2 --n-shot 5 10 20
 """
 
 import argparse
@@ -18,13 +19,13 @@ from inspect_ai import Task, eval, task
 from inspect_ai.dataset import MemoryDataset, Sample
 from inspect_ai.scorer import Score, scorer, accuracy, stderr
 from inspect_ai.solver import generate, system_message
+from inspect_ai.model import GenerateConfig
 
 
 DATASET_FILE = "artifacts/datasets/classification_dataset.jsonl"
-N_SHOT = 10  # Number of examples per class (total = 2*n)
 N_TEST = 100  # Number of test samples
 LOG_DIR = "./artifacts/logs"
-MAX_CONNECTIONS = 50
+MAX_CONNECTIONS = 500
 
 
 load_dotenv()
@@ -40,7 +41,8 @@ def load_classification_dataset(dataset_path):
 def create_few_shot_prompt(rule, examples, test_text):
     """Create a prompt with few-shot examples for classification."""
     prompt_parts = [
-        "Classify the provided text as true or false using the given examples as a guide; you'll have to figure out what classification rule is being used in the examples. Answer only with 'true' or 'false'."
+        "Classify the provided text as true or false using the given examples as a guide; you'll have to figure out what classification rule is being used in the examples. Answer only with 'true' or 'false'.",
+        "",
     ]
 
     # Add few-shot examples
@@ -81,11 +83,9 @@ def create_evaluation_samples(dataset, rule, n_shot, n_test):
         true_samples = random.sample(true_examples, n_shot)
         false_samples = random.sample(false_examples, n_shot)
 
-        # Interleave true and false examples
-        few_shot_examples = []
-        for i in range(n_shot):
-            few_shot_examples.append(true_samples[i])
-            few_shot_examples.append(false_samples[i])
+        # Combine and randomize the order
+        few_shot_examples = true_samples + false_samples
+        random.shuffle(few_shot_examples)
 
         # Sample a test example (from either class)
         test_example = random.choice(dataset)
@@ -139,16 +139,16 @@ def exact_match():
 
 
 @task
-def evaluate_icl_task(rule):
+def evaluate_icl_task(rule, n_shot):
     """Evaluate in-context learning for a specific classification rule."""
     # Load dataset
     dataset = load_classification_dataset(DATASET_FILE)
     print(f"Loaded {len(dataset)} samples from dataset")
 
     # Create evaluation samples
-    samples = create_evaluation_samples(dataset, rule, N_SHOT, N_TEST)
+    samples = create_evaluation_samples(dataset, rule, n_shot, N_TEST)
     print(
-        f"Created {len(samples)} test samples with {2 * N_SHOT} total examples ({N_SHOT} per class)"
+        f"Created {len(samples)} test samples with {2 * n_shot} total examples ({n_shot} per class)"
     )
 
     return Task(
@@ -158,9 +158,13 @@ def evaluate_icl_task(rule):
                 "You are a helpful assistant that classifies text. "
                 "Answer only with 'true' or 'false' based on the examples provided."
             ),
-            generate(),
+            generate(
+                config=GenerateConfig(extra_body={"reasoning": {"enabled": False}})
+            ),
         ],
         scorer=exact_match(),
+        name=f"icl_{rule}_n{n_shot}",
+        metadata={"rule": rule, "n_shot": n_shot},
     )
 
 
@@ -169,34 +173,68 @@ if __name__ == "__main__":
         description="Evaluate in-context learning for classification"
     )
     parser.add_argument(
-        "--rule",
-        type=str,
+        "--rules",
+        nargs="+",
         required=True,
-        help="Classification rule to evaluate (e.g., 'contains_commas', 'sentence_count_multiple')",
+        help="Classification rules to evaluate (space-separated)",
     )
     parser.add_argument(
-        "--model",
-        type=str,
-        default="openrouter/anthropic/claude-sonnet-4.5",
-        help=f"Model to evaluate",
+        "--models",
+        nargs="+",
+        required=True,
+        help="Models to evaluate (space-separated)",
+    )
+    parser.add_argument(
+        "--n-shot",
+        nargs="+",
+        type=int,
+        required=True,
+        help="Number of few-shot examples per class (space-separated)",
+    )
+    parser.add_argument(
+        "--max-tasks",
+        type=int,
+        default=5,
+        help="Maximum number of tasks to run in parallel (default: 5)",
     )
     args = parser.parse_args()
 
     print(f"Evaluating in-context learning performance")
-    print(f"Rule: {args.rule}")
-    print(f"Model: {args.model}")
-    print(f"Few-shot examples: {N_SHOT} per class (total: {2 * N_SHOT})")
+    print(f"Rules: {args.rules}")
+    print(f"Models: {args.models}")
+    print(f"N-shot values: {args.n_shot}")
     print(f"Test samples: {N_TEST}")
+    print(f"Total evaluations: {len(args.rules) * len(args.models) * len(args.n_shot)}")
     print()
 
-    # Run the evaluation
+    # Create task configurations for all parameter combinations
+    tasks = []
+    for rule in args.rules:
+        for n_shot in args.n_shot:
+            tasks.append(evaluate_icl_task(rule, n_shot))
+
+    # Run evaluations across all models and tasks
     logs = eval(
-        evaluate_icl_task(args.rule),
-        model=args.model,
+        tasks,
+        model=args.models,
         log_dir=LOG_DIR,
         max_connections=MAX_CONNECTIONS,
+        max_tasks=args.max_tasks,
     )
 
-    log = logs[0]
-    print(f"\nEvaluation complete!")
-    print(f"Log saved to: {log.location}")
+    # Print summary
+    print(f"\n{'='*80}")
+    print("SUMMARY RESULTS")
+    print(f"{'='*80}")
+
+    for log in logs:
+        task_name = log.eval.task
+        model = log.eval.model
+
+        if log.results and log.results.scores:
+            acc = next((s for s in log.results.scores if s.name == "accuracy"), None)
+            if acc:
+                print(f"{model:40s} | {task_name:30s} | {acc.value:.2%}")
+
+    print(f"\n{'='*80}")
+    print(f"All logs saved to: {LOG_DIR}")

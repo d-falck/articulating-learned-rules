@@ -51,10 +51,6 @@ TOPICS = [
 
 
 RULES = {
-    "sentence_count_multiple": {
-        "true": "Write multiple sentences (2 or more)",
-        "false": "Write exactly one sentence",
-    },
     "contains_questions": {
         "true": "Include at least one question mark",
         "false": "Do not use any question marks",
@@ -83,13 +79,17 @@ RULES = {
         "true": "Include at least one quotation mark",
         "false": "Do not use any quotation marks",
     },
-    "word_count_long": {
-        "true": "Write over 40 words",
-        "false": "Write under 25 words",
-    },
     "contains_and": {
         "true": "Include the word 'and' at least once",
         "false": "Do not use the word 'and'",
+    },
+    "ends_with_period": {
+        "true": "End the text with a period (.)",
+        "false": "End the text with something other than a period",
+    },
+    "contains_verb": {
+        "true": "Include at least one verb (action word like 'runs', 'is', 'makes')",
+        "false": "Do not include any verbs (no action words)",
     },
 }
 
@@ -131,7 +131,8 @@ def create_prompt(topic, rules_dict):
 
     instructions.append("")
     instructions.append(
-        "Generate a paragraph about this topic following ALL the requirements above."
+        "Generate a single short sentence (one line) about this topic following ALL the requirements above. "
+        "Keep it concise and simple."
     )
 
     return "\n".join(instructions)
@@ -149,7 +150,7 @@ def self_check():
             "Please carefully review your previous response and check if it follows ALL the requirements listed above. "
             "If it does not fully satisfy all requirements, generate a corrected version. "
             "If it does satisfy all requirements, output the exact same text again. "
-            "Only output the paragraph text, nothing else."
+            "Only output the single sentence, nothing else."
         )
 
         # Append the check prompt to the conversation using ChatMessageUser
@@ -163,7 +164,7 @@ def self_check():
 
 @task
 def generate_classification_dataset():
-    """Generate dataset with paragraphs following various rule combinations."""
+    """Generate dataset with short sentences following various rule combinations."""
 
     combinations = generate_rule_combinations()
 
@@ -180,8 +181,8 @@ def generate_classification_dataset():
         dataset=MemoryDataset(samples),
         solver=[
             system_message(
-                "You are a helpful assistant that generates text following specific constraints. "
-                "Follow the given requirements exactly."
+                "You are a helpful assistant that generates short, simple sentences following specific constraints. "
+                "Follow the given requirements exactly and keep sentences concise."
             ),
             generate(),
             self_check(),
