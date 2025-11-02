@@ -5,8 +5,11 @@ description = "Take-home assignment for Owain Evans' Astra stream."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=0.72.0",
     "datasets>=4.2.0",
+    "google-genai>=1.47.0",
     "inspect_ai",
+    "matplotlib>=3.7.0",
     "openai>=2.6.0",
     "python-confetti",
 ]
