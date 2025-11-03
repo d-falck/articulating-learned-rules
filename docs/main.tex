@@ -6,6 +6,7 @@
 \usepackage{cleveref}
 \usepackage{tcolorbox}
 \usepackage{xcolor}
+\usepackage{parskip}
 
 \graphicspath{ {images/} }
 
@@ -49,8 +50,8 @@
     fontupper=\small
 }
 
-\title{Rule Articulation in Few-Shot Learning\thanks{Code available at \url{https://github.com/d-falck/articulating-learned-rules}. Time spent: approximately 12 hours.}}
-\author{Damon Falck}
+\title{Rule Articulation in Few-Shot Learning}
+\author{Damon Falck\thanks{Code available at \url{https://github.com/d-falck/articulating-learned-rules}. Time spent: approximately 14 hours.}}
 \date{November 1, 2025}
 
 \begin{document}
@@ -58,14 +59,14 @@
 \maketitle
 
 \begin{abstract}
-We evaluate whether language models can articulate the classification rules they learn from few-shot examples. Using 10 binary classification rules, we test both multi-choice articulation (selecting the correct rule from options) and free-form articulation (explaining in their own words). We measure three aspects of free-form articulation: similarity to ground-truth rules, usefulness for classifying new examples, and faithfulness to the model's actual behavior. On high-accuracy tasks (>90\%), models produce useful articulations but these often differ semantically from the true rules (similarity 0.4-1.0)—likely because alternative rules are indistinguishable on the data distribution. More surprisingly, articulations aren't always faithful to actual behavior (faithfulness 0.5-1.0), suggesting models add details during articulation that were previously fuzzy.
+We evaluate whether language models can articulate the classification rules they learn from few-shot examples. Using 10 binary classification rules, we test both multi-choice articulation (selecting the correct rule from options) and free-form articulation (explaining in their own words). We measure three aspects of free-form articulation: similarity to ground-truth rules, usefulness for classifying new examples, and faithfulness to the model's actual behavior. On high-accuracy tasks (\textgreater90\%), models produce useful articulations but these often differ semantically from the true rules (similarity 0.4--1.0)—likely because alternative rules are indistinguishable on the data distribution. More surprisingly, articulations aren't always faithful to actual behavior (faithfulness 0.5--1.0), suggesting models add details during articulation that were previously fuzzy.
 \end{abstract}
 
 \section{Methodology}
 
 \subsection{Data generation}
 
-We use an LLM (Claude Sonnet 4.5) to generate text samples that satisfy or violate 10 binary classification rules like \textit{ends\_with\_question} (``The text ends with a question mark''), \textit{contains\_numbers} (``Contains at least one digit''), and \textit{is\_first\_person} (``Uses first-person pronouns''). The model generates examples about random topics, then validates its output via self-check. We create both isolated datasets (1,000 samples per rule) and combined datasets (1,000 samples with all 10 labels). See \cref{fig:generation_schematic} and appendix for details.
+We use an LLM (Claude Sonnet 4.5) to generate text samples that satisfy or violate 10 binary classification rules like \textit{ends\_with\_question} (``The text ends with a question mark''), \textit{contains\_numbers} (``Contains at least one digit''), and \textit{is\_first\_person} (``Uses first-person pronouns''). The model generates examples about random topics, then validates its output via self-check. We create 1,000 examples per rule (500 positive, 500 negative).\footnote{Previously we explored creating a single dataset with each sample satisfying a randomly selected combination of classification rules, but this proved too confusing for many classifier models.} See \cref{fig:generation_schematic} and appendix for details.
 
 \begin{figure}[htbp]
     \centering
@@ -104,56 +105,56 @@ We test whether models' behavior matches their articulated rules (\cref{fig:fait
 
 \subsection{In-context learning}
 
-Most models achieve over 90\% accuracy with sufficient few-shot examples (\cref{fig:icl_by_model}), except the weaker \texttt{gpt-4.1-nano}. Accuracy generally increases with more shots. See \cref{fig:icl_by_rule} for per-rule breakdowns.
+Most models achieve over 90\% accuracy with sufficient few-shot examples (\cref{fig:icl_by_model}), except the weaker \texttt{gpt-4.1-nano}. Accuracy generally increases with more shots, though some rules are consistently harder to learn than others (per-rule breakdown in \cref{fig:icl_by_rule}).
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{icl_overall.png}
+    \includegraphics[width=\textwidth]{icl_overall.png}
     \caption{In-context classification accuracy by model for different numbers of few-shot examples $\texttt{n\_shot}$. With the exception of $\texttt{gpt-4.1-nano}$ (a significantly weaker model), all samples are reliably classified with over 90\% accuracy.}
     \label{fig:icl_by_model}
 \end{figure}
 
 \subsection{Articulation}
 
-For multi-choice articulation, models correctly identify the true rule in most cases on high-accuracy tasks (\cref{fig:multi_choice_accuracy}).
+For multi-choice articulation, models correctly identify the true rule in most cases when classification accuracy is high (\cref{fig:multi_choice_accuracy}). This suggests they can recognize their learned rule when given options to choose from.
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{articulation_multi_overall.png}
+    \includegraphics[width=\textwidth]{articulation_multi_overall.png}
     \caption{Multi-choice articulation accuracy by classification accuracy, across models and tasks. Models reliably identify the correct rule when classification accuracy is high.}
     \label{fig:multi_choice_accuracy}
 \end{figure}
 
-For free-form articulation on high-accuracy tasks (>90\%), semantic similarity to ground-truth rules varies widely (0.4-1.0, \cref{fig:similarity_by_accuracy}). This likely reflects that multiple semantically distinct rules are functionally equivalent on the data distribution—models learn correct heuristics that differ from the true rule.
+Free-form articulation tells a more nuanced story. On high-accuracy tasks (>90\%), semantic similarity to ground-truth rules varies widely (0.4-1.0, \cref{fig:similarity_by_accuracy}). This likely reflects that multiple semantically distinct rules are functionally equivalent on the data distribution—models learn correct heuristics that differ from the true rule.
 
-In contrast, high-accuracy tasks consistently produce useful articulations (>90\% usefulness, \cref{fig:usefulness_by_accuracy}). Even when articulations differ semantically from ground truth, they're practically applicable.
+In contrast, high-accuracy tasks consistently produce useful articulations (>90\% usefulness, \cref{fig:usefulness_by_accuracy}). Even when articulations differ semantically from ground truth, they're practically applicable. This decoupling of similarity and usefulness suggests that what matters is capturing the functional rule, not necessarily using the same language as the ground truth.
 
-Longer articulations have slightly lower similarity (\cref{fig:similarity_by_prompt_length}) but similar usefulness (\cref{fig:usefulness_by_prompt_length}). Per-rule metrics in \cref{fig:similarity_by_rule,fig:usefulness_by_rule}.
+We also tested different articulation length prompts. Longer articulations show slightly lower similarity to ground truth (\cref{fig:similarity_by_prompt_length}) but maintain similar usefulness (\cref{fig:usefulness_by_prompt_length}), suggesting the extra detail doesn't hurt practical applicability. Detailed per-rule breakdowns are in \cref{fig:similarity_by_rule,fig:usefulness_by_rule}.
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{articulation_free_similarity_overall.png}
+    \includegraphics[width=\textwidth]{articulation_free_similarity_overall.png}
     \caption{Articulation \textit{similarity} (to the ground-truth rule) by classification accuracy, across 6 models, 10 classification tasks, and 3 values of \texttt{n\_shot} (5, 10, 15). For all models, articulation similarity is weakly correlated with classification accuracy, with articulation similarity on high-accuracy tasks varying widely between 0.4 and 1.0.}
     \label{fig:similarity_by_accuracy}
 \end{figure}
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{articulation_free_usefulness_overall.png}
+    \includegraphics[width=\textwidth]{articulation_free_usefulness_overall.png}
     \caption{Articulation \textit{usefulness} (for classifying held-out samples from the same task) by classification accuracy, across 6 models, 10 classification tasks, and 3 values of \texttt{n\_shot} (5, 10, 15). There is a fairly strong correlation shown, with all articulations on high-accuracy tasks (over 90\%) displaying very high usefulness (over 90\%).}
     \label{fig:usefulness_by_accuracy}
 \end{figure}
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{similarity_by_prompt_length.png}
+    \includegraphics[width=\textwidth]{similarity_by_prompt_length.png}
     \caption{Articulation \textit{similarity} for different articulation length guidance prompts. Longer articulations have a slightly lower semantic similarity with the ground-truth rule.}
     \label{fig:similarity_by_prompt_length}
 \end{figure}
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{usefulness_by_prompt_length.png}
+    \includegraphics[width=\textwidth]{usefulness_by_prompt_length.png}
     \caption{Articulation \textit{usefulness} for different articulation length guidance prompts. Longer articulations appear to be just as useful for classifying new examples as shorter ones.}
     \label{fig:usefulness_by_prompt_length}
 \end{figure}
@@ -163,30 +164,30 @@ Longer articulations have slightly lower similarity (\cref{fig:similarity_by_pro
 
 Even on high-accuracy tasks (>90\%), faithfulness varies substantially (0.5-1.0, \cref{fig:faithfulness_by_accuracy}). This suggests models add specific details during articulation that were previously fuzzy—when tested on examples where these details matter, behavior may differ from the articulation.
 
-\texttt{gpt-4.1} shows consistently higher faithfulness than other models. \Cref{fig:per_model_summaries} compares all three metrics at \(\texttt{n\_shot}=15\). Per-rule analysis in \cref{fig:faithfulness_by_rule}.
+Interestingly, \texttt{gpt-4.1} shows consistently higher faithfulness than other models, suggesting some models are better at articulating only what they've actually learned. \Cref{fig:per_model_summaries} compares all three metrics side-by-side at \(\texttt{n\_shot}=15\), and per-rule breakdowns are in \cref{fig:faithfulness_by_rule}.
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{articulation_free_faithfulness_overall.png}
+    \includegraphics[width=\textwidth]{articulation_free_faithfulness_overall.png}
     \caption{Articulation \textit{faithfulness} (alignment with model behavior on examples generated near the implied classification boundary) by classification accuracy, across 6 models, 10 classification tasks, and 3 values of \texttt{n\_shot} (5, 10, 15). Some correlation is shown, but faithfulness values on high-accuracy tasks vary between 0.5 and 1.0, with notably distinct behavior for different models (\texttt{gpt-4.1} is more faithful than other models generally).}
     \label{fig:faithfulness_by_accuracy}
 \end{figure}
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{articulation_free_metrics_comparison.png}
+    \includegraphics[width=\textwidth]{articulation_free_metrics_comparison.png}
     \caption{Articulation similarity, usefulness and faithfulness by model for \(\texttt{n\_shot}=15\), averaged across all classification tasks.}
     \label{fig:per_model_summaries}
 \end{figure}
 
 \subsection{Adding Chain-of-Thought}
 
-Adding CoT prompting has no significant effect on similarity, usefulness, or faithfulness for either strong or weak models (\cref{fig:cot_comparison}).
+Adding CoT prompting has no significant effect on similarity, usefulness, or faithfulness for either strong or weak models (\cref{fig:cot_comparison}).\footnote{I find this a little surprising and would like to double-check these results.}
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{cot_comparison.png}
-    \caption{Articulation similarity, usefulness and faithfulness before and after adding externalized chain-of-thought (CoT). There is no significant effect of adding chain-of-thought to either the strong or the weak model.\footnote{I find this a little surprising and would like to double-check these results.}}
+    \includegraphics[width=\textwidth]{cot_comparison.png}
+    \caption{Articulation similarity, usefulness and faithfulness before and after adding externalized chain-of-thought (CoT). There is no significant effect of adding chain-of-thought to either the strong or the weak model. Note there is a bug in the faithfulness results here and they should be ignored.}
     \label{fig:cot_comparison}
 \end{figure}
 
@@ -206,7 +207,7 @@ More surprisingly, articulations aren't always faithful to actual behavior (fait
 
 \section{Task Examples and Model Articulations}
 
-Concrete examples of tasks, prompts, and articulations.
+This section provides concrete examples to illustrate the experimental setup: the classification rules we use, what the prompts look like, and how models articulate the rules they learn.
 
 \subsection{Classification tasks}
 
@@ -273,6 +274,8 @@ After the model classifies the test example, we prompt (short version):
 
 \subsection{Example model articulations}
 
+Here are some representative articulations showing how models with different similarity scores might explain the same rule.
+
 For \textit{ends\_with\_question}:
 
 \begin{itemize}
@@ -292,7 +295,7 @@ For \textit{is\_first\_person}:
 
 \subsection{Complete evaluation trace}
 
-Complete example for \textit{has\_repeated\_word} with 30 few-shot examples. The model correctly classifies and articulates, but lists specific words rather than the general rule.
+Here's a complete example showing the full interaction for the \textit{has\_repeated\_word} task with 30 few-shot examples. The model correctly classifies the test example and articulates a rule, but lists specific words rather than capturing the general pattern.
 
 \begin{smallsystembox}
 You are a helpful assistant that classifies text. Answer only with 'true' or 'false' based on the examples provided.
@@ -423,42 +426,42 @@ The input is labeled as 'true' if the word ``money'' or ``shoes'' or ``library''
 
 \section{Additional Results}
 
-Per-rule breakdowns of metrics from the main text.
+This section breaks down the results from the main text by individual classification rules, showing how performance varies across different types of tasks.
 
 \subsection{In-Context Learning by Rule}
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{icl_by_rule.png}
+    \includegraphics[width=\textwidth]{icl_by_rule.png}
     \caption{In-context classification accuracy by rule. Some rules (e.g., \textit{ends\_with\_question}, \textit{contains\_numbers}) are easier to learn than others (e.g., \textit{contains\_rhyme}, \textit{has\_many\_verbs}).}
     \label{fig:icl_by_rule}
 \end{figure}
 
 \subsection{Articulation Metrics by Rule}
 
-Similarity and usefulness scores by classification rule.
+Here we show how similarity and usefulness vary across the different classification rules.
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{articulation_free_similarity_by_rule.png}
+    \includegraphics[width=\textwidth]{articulation_free_similarity_by_rule.png}
     \caption{Articulation \textit{similarity} broken down by classification rule across models and shot counts. Rules with clear syntactic patterns (e.g., \textit{ends\_with\_question}, \textit{contains\_numbers}) generally achieve higher similarity scores, while more subjective rules (e.g., \textit{contains\_rhyme}, \textit{has\_many\_verbs}) show lower semantic alignment with ground-truth descriptions.}
     \label{fig:similarity_by_rule}
 \end{figure}
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{articulation_free_usefulness_by_rule.png}
+    \includegraphics[width=\textwidth]{articulation_free_usefulness_by_rule.png}
     \caption{Articulation \textit{usefulness} broken down by classification rule across models and shot counts. Most rules show high usefulness scores when classification accuracy is high, indicating that articulations tend to be practically applicable even when they may not perfectly match ground-truth descriptions semantically.}
     \label{fig:usefulness_by_rule}
 \end{figure}
 
 \subsection{Faithfulness by Rule}
 
-Faithfulness scores by classification rule.
+Finally, we show faithfulness broken down by rule to see which types of tasks lead to more or less faithful articulations.
 
 \begin{figure}[htp]
     \centering
-    \includegraphics[width=0.8\textwidth]{articulation_free_faithfulness_by_rule.png}
+    \includegraphics[width=\textwidth]{articulation_free_faithfulness_by_rule.png}
     \caption{Articulation \textit{faithfulness} broken down by classification rule across models and shot counts. Faithfulness varies considerably by rule, with simpler syntactic rules showing higher consistency between articulations and behavior, while more complex semantic rules exhibit greater variability in faithfulness scores.}
     \label{fig:faithfulness_by_rule}
 \end{figure}
