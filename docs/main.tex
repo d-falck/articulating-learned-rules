@@ -1,0 +1,165 @@
+\documentclass[11pt]{article}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage{cleveref}
+
+\graphicspath{ {images/} }
+
+\title{Rule Articulation in Few-Shot Learning}
+\author{Damon Falck}
+\date{November 1, 2025}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Abstract text here.
+\end{abstract}
+
+\section{Methodology}
+
+\subsection{Data generation}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{generation_diagram.png}
+    \caption{The process used to generate our dataset of classification tasks.}
+    \label{fig:generation_schematic}
+\end{figure}
+
+\subsection{Measuring articulation quality}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=\textwidth]{articulation_diagram.png}
+    \caption{Calculating the \textit{similarity} and \textit{usefulness} metrics we use to assess the quality of an articulation.}
+    \label{fig:articulation_schematic}
+\end{figure}
+
+\subsection{Faithfulness}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=\textwidth]{faithfulness_diagram.png}
+    \caption{Measuring the \textit{faithfulness} of an articulation.}
+    \label{fig:faithfulness_schematic}
+\end{figure}
+
+\section{Results}
+
+\subsection{In-context learning}
+
+
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{icl_overall.png}
+    \caption{In-context classification accuracy by model for different numbers of few-shot examples $\texttt{n\_shot}$. With the exception of $\texttt{gpt-4.1-nano}$ (a significantly weaker model), all samples are reliably classified with over 90\% accuracy.}
+    \label{fig:icl_by_model}
+\end{figure}
+
+\subsection{Articulation}
+
+
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{articulation_free_similarity_overall.png}
+    \caption{Articulation \textit{similarity} (to the ground-truth rule) by classification accuracy, across 6 models, 10 classification tasks, and 3 values of \texttt{n\_shot} (5, 10, 15). For all models, articulation similarity is weakly correlated with classification accuracy, with articulation similarity on high-accuracy tasks varying widely between 0.4 and 1.0.}
+    \label{fig:similarity_by_accuracy}
+\end{figure}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{articulation_free_usefulness_overall.png}
+    \caption{Articulation \textit{usefulness} (for classifying held-out samples from the same task) by classification accuracy, across 6 models, 10 classification tasks, and 3 values of \texttt{n\_shot} (5, 10, 15). There is a fairly strong correlation shown, with all articulations on high-accuracy tasks (over 90\%) displaying very high usefulness (over 90\%).}
+    \label{fig:usefulness_by_accuracy}
+\end{figure}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{similarity_by_prompt_length.png}
+    \caption{Articulation \textit{similarity} for different articulation length guidance prompts. Longer articulations have a slightly lower semantic similarity with the ground-truth rule.}
+    \label{fig:similarity_by_prompt_length}
+\end{figure}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{usefulness_by_prompt_length.png}
+    \caption{Articulation \textit{usefulness} for different articulation length guidance prompts. Longer articulations appear to be just as useful for classifying new examples as shorter ones.}
+    \label{fig:usefulness_by_prompt_length}
+\end{figure}
+
+
+\subsection{Faithfulness}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{articulation_free_faithfulness_overall.png}
+    \caption{Articulation \textit{faithfulness} (alignment with model behavior on examples generated near the implied classification boundary) by classification accuracy, across 6 models, 10 classification tasks, and 3 values of \texttt{n\_shot} (5, 10, 15). Some correlation is shown, but faithfulness values on high-accuracy tasks vary between 0.5 and 1.0, with notably distinct behavior for different models (\texttt{gpt-4.1} is more faithful than other models generally).}
+    \label{fig:faithfulness_by_accuracy}
+\end{figure}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{articulation_free_metrics_comparison.png}
+    \caption{Articulation similarity, usefulness and faithfulness by model for \(\texttt{n\_shot}=15\), averaged across all classification tasks.}
+    \label{fig:per_model_summaries}
+\end{figure}
+
+\subsection{Adding Chain-of-Thought}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{cot_comparison.png}
+    \caption{Articulation similarity, usefulness and faithfulness before and after adding externalized chain-of-thought (CoT). There is no significant effect of adding chain-of-thought to either the strong or the weak model.\footnote{I find this a little surprising and would like to double-check these results.}}
+    \label{fig:cot_comparison}
+\end{figure}
+
+\section{Conclusion}
+Conclusion text here.
+
+\subsection{Next steps}
+
+\begin{itemize}
+    \item Try imposing more constraints on the articulation (forcing it to be even simpler than in the ``short'' case currently).
+\end{itemize}
+
+\appendix
+
+\section{Additional Results}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{icl_by_rule.png}
+    \caption{ICL by Rule (traces for each n\_shots; for each model)}
+    \label{fig:icl_by_rule}
+\end{figure}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{articulation_free_similarity_by_rule.png}
+    \caption{Similarity by Rule (short free)}
+    \label{fig:similarity_by_rule}
+\end{figure}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{articulation_free_usefulness_by_rule.png}
+    \caption{Usefulness by Rule (short free)}
+    \label{fig:usefulness_by_rule}
+\end{figure}
+
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{articulation_free_faithfulness_by_rule.png}
+    \caption{Faithfulness by Rule (short free)}
+    \label{fig:faithfulness_by_rule}
+\end{figure}
+
+% Note: Example Trace figure not found in the uploaded files
+
+\end{document}
