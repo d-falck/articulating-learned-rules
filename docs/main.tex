@@ -4,7 +4,7 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{hyperref}
 \usepackage{cleveref}
-\usepackage{tcolorbox}
+\usepackage[breakable]{tcolorbox}
 \usepackage{xcolor}
 \usepackage{parskip}
 
@@ -21,7 +21,8 @@
     right=3pt,
     top=3pt,
     bottom=3pt,
-    fontupper=\small
+    fontupper=\small,
+    breakable
 }
 
 \newtcolorbox{smalluserbox}{
@@ -34,7 +35,8 @@
     right=3pt,
     top=3pt,
     bottom=3pt,
-    fontupper=\small
+    fontupper=\small,
+    breakable
 }
 
 \newtcolorbox{smallassistantbox}{
@@ -47,7 +49,8 @@
     right=3pt,
     top=3pt,
     bottom=3pt,
-    fontupper=\small
+    fontupper=\small,
+    breakable
 }
 
 \title{Rule Articulation in Few-Shot Learning}
