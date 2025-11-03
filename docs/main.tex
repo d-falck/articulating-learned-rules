@@ -4,10 +4,52 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{hyperref}
 \usepackage{cleveref}
+\usepackage{tcolorbox}
+\usepackage{xcolor}
 
 \graphicspath{ {images/} }
 
-\title{Rule Articulation in Few-Shot Learning}
+% Define custom boxes for conversation traces
+\newtcolorbox{smallsystembox}{
+    colback=gray!10,
+    colframe=gray!50,
+    boxrule=0.5pt,
+    arc=2pt,
+    boxsep=3pt,
+    left=3pt,
+    right=3pt,
+    top=3pt,
+    bottom=3pt,
+    fontupper=\small
+}
+
+\newtcolorbox{smalluserbox}{
+    colback=blue!5,
+    colframe=blue!30,
+    boxrule=0.5pt,
+    arc=2pt,
+    boxsep=3pt,
+    left=3pt,
+    right=3pt,
+    top=3pt,
+    bottom=3pt,
+    fontupper=\small
+}
+
+\newtcolorbox{smallassistantbox}{
+    colback=green!5,
+    colframe=green!30,
+    boxrule=0.5pt,
+    arc=2pt,
+    boxsep=3pt,
+    left=3pt,
+    right=3pt,
+    top=3pt,
+    bottom=3pt,
+    fontupper=\small
+}
+
+\title{Rule Articulation in Few-Shot Learning\thanks{Code available at \url{https://github.com/d-falck/articulating-learned-rules}. Time spent: approximately 12 hours.}}
 \author{Damon Falck}
 \date{November 1, 2025}
 
@@ -16,12 +58,14 @@
 \maketitle
 
 \begin{abstract}
-Abstract text here.
+We evaluate whether language models can articulate the classification rules they learn from few-shot examples. Using 10 binary classification rules, we test both multi-choice articulation (selecting the correct rule from options) and free-form articulation (explaining in their own words). We measure three aspects of free-form articulation: similarity to ground-truth rules, usefulness for classifying new examples, and faithfulness to the model's actual behavior. On high-accuracy tasks (>90\%), models produce useful articulations but these often differ semantically from the true rules (similarity 0.4-1.0)—likely because alternative rules are indistinguishable on the data distribution. More surprisingly, articulations aren't always faithful to actual behavior (faithfulness 0.5-1.0), suggesting models add details during articulation that were previously fuzzy.
 \end{abstract}
 
 \section{Methodology}
 
 \subsection{Data generation}
+
+We use an LLM (Claude Sonnet 4.5) to generate text samples that satisfy or violate 10 binary classification rules like \textit{ends\_with\_question} (``The text ends with a question mark''), \textit{contains\_numbers} (``Contains at least one digit''), and \textit{is\_first\_person} (``Uses first-person pronouns''). The model generates examples about random topics, then validates its output via self-check. We create both isolated datasets (1,000 samples per rule) and combined datasets (1,000 samples with all 10 labels). See \cref{fig:generation_schematic} and appendix for details.
 
 \begin{figure}[htbp]
     \centering
@@ -30,16 +74,24 @@ Abstract text here.
     \label{fig:generation_schematic}
 \end{figure}
 
-\subsection{Measuring articulation quality}
+\subsection{Articulation methods}
+
+We test two approaches. In \textbf{multi-choice articulation}, we give models several candidate rule descriptions and ask them to select which they used. For \textit{ends\_with\_question}, options might be: (1) ``Ends with ?'' (correct), (2) ``Contains informal language'', (3) ``Uses first-person pronouns'', (4) ``Is very short''. We measure accuracy as the proportion of correct selections.
+
+In \textbf{free-form articulation}, models explain rules in their own words (prompt: ``Explain what rule you used to classify this text. Provide a simple rule in one short sentence.''). For \textit{ends\_with\_question}, a model might say ``The text is true if it ends with a question mark'' or ``The text is true if it asks a question''.
+
+We score free-form articulations with two metrics (\cref{fig:articulation_schematic}). \textbf{Similarity} uses a grader model to score semantic alignment with the true rule (0.0-1.0). \textbf{Usefulness} tests whether a grader can correctly classify 10 held-out examples using only the articulated rule.
 
 \begin{figure}[htp]
     \centering
     \includegraphics[width=\textwidth]{articulation_diagram.png}
-    \caption{Calculating the \textit{similarity} and \textit{usefulness} metrics we use to assess the quality of an articulation.}
+    \caption{Calculating the \textit{similarity} and \textit{usefulness} metrics for free-form articulations.}
     \label{fig:articulation_schematic}
 \end{figure}
 
 \subsection{Faithfulness}
+
+We test whether models' behavior matches their articulated rules (\cref{fig:faithfulness_schematic}). After articulation, a grader model generates synthetic test cases designed to satisfy or violate the articulated rule. The original model then classifies these using its original few-shot context. \textbf{Faithfulness} is the proportion where the model's prediction matches the expected label based on its articulation.
 
 \begin{figure}[htp]
     \centering
@@ -52,7 +104,7 @@ Abstract text here.
 
 \subsection{In-context learning}
 
-
+Most models achieve over 90\% accuracy with sufficient few-shot examples (\cref{fig:icl_by_model}), except the weaker \texttt{gpt-4.1-nano}. Accuracy generally increases with more shots. See \cref{fig:icl_by_rule} for per-rule breakdowns.
 
 \begin{figure}[htp]
     \centering
@@ -63,7 +115,20 @@ Abstract text here.
 
 \subsection{Articulation}
 
+For multi-choice articulation, models correctly identify the true rule in most cases on high-accuracy tasks (\cref{fig:multi_choice_accuracy}).
 
+\begin{figure}[htp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{articulation_multi_overall.png}
+    \caption{Multi-choice articulation accuracy by classification accuracy, across models and tasks. Models reliably identify the correct rule when classification accuracy is high.}
+    \label{fig:multi_choice_accuracy}
+\end{figure}
+
+For free-form articulation on high-accuracy tasks (>90\%), semantic similarity to ground-truth rules varies widely (0.4-1.0, \cref{fig:similarity_by_accuracy}). This likely reflects that multiple semantically distinct rules are functionally equivalent on the data distribution—models learn correct heuristics that differ from the true rule.
+
+In contrast, high-accuracy tasks consistently produce useful articulations (>90\% usefulness, \cref{fig:usefulness_by_accuracy}). Even when articulations differ semantically from ground truth, they're practically applicable.
+
+Longer articulations have slightly lower similarity (\cref{fig:similarity_by_prompt_length}) but similar usefulness (\cref{fig:usefulness_by_prompt_length}). Per-rule metrics in \cref{fig:similarity_by_rule,fig:usefulness_by_rule}.
 
 \begin{figure}[htp]
     \centering
@@ -96,6 +161,10 @@ Abstract text here.
 
 \subsection{Faithfulness}
 
+Even on high-accuracy tasks (>90\%), faithfulness varies substantially (0.5-1.0, \cref{fig:faithfulness_by_accuracy}). This suggests models add specific details during articulation that were previously fuzzy—when tested on examples where these details matter, behavior may differ from the articulation.
+
+\texttt{gpt-4.1} shows consistently higher faithfulness than other models. \Cref{fig:per_model_summaries} compares all three metrics at \(\texttt{n\_shot}=15\). Per-rule analysis in \cref{fig:faithfulness_by_rule}.
+
 \begin{figure}[htp]
     \centering
     \includegraphics[width=0.8\textwidth]{articulation_free_faithfulness_overall.png}
@@ -112,6 +181,8 @@ Abstract text here.
 
 \subsection{Adding Chain-of-Thought}
 
+Adding CoT prompting has no significant effect on similarity, usefulness, or faithfulness for either strong or weak models (\cref{fig:cot_comparison}).
+
 \begin{figure}[htp]
     \centering
     \includegraphics[width=0.8\textwidth]{cot_comparison.png}
@@ -120,7 +191,10 @@ Abstract text here.
 \end{figure}
 
 \section{Conclusion}
-Conclusion text here.
+
+On high-accuracy classification tasks (>90\%), models produce useful articulations that correctly classify new examples. However, these articulations often differ semantically from the true rules (similarity 0.4-1.0), likely because multiple rules are functionally equivalent on the data distribution.
+
+More surprisingly, articulations aren't always faithful to actual behavior (faithfulness 0.5-1.0). Models appear to add specific details during articulation that were previously fuzzy—when tested on examples where these details matter, behavior can be inconsistent with the articulation. Future work could explore regularizing toward simpler articulations to prevent over-specification.
 
 \subsection{Next steps}
 
@@ -130,36 +204,263 @@ Conclusion text here.
 
 \appendix
 
+\section{Task Examples and Model Articulations}
+
+Concrete examples of tasks, prompts, and articulations.
+
+\subsection{Classification tasks}
+
+We evaluate on 10 binary classification rules:
+
+\begin{enumerate}
+    \item \textbf{ends\_with\_question}: ``The text ends with a question mark (?)''
+    \item \textbf{contains\_numbers}: ``The text contains at least one numerical digit (0-9)''
+    \item \textbf{is\_title\_case}: ``Every word in the text starts with a capital letter''
+    \item \textbf{contains\_quotes}: ``The text contains at least one quotation mark''
+    \item \textbf{has\_many\_verbs}: ``The text contains at least 5 different verbs''
+    \item \textbf{contains\_hashtag}: ``The text contains at least one hashtag symbol (\#)''
+    \item \textbf{is\_very\_short}: ``The text is fewer than 7 words''
+    \item \textbf{is\_first\_person}: ``The text uses first-person pronouns (I, me, my, we, our, us)''
+    \item \textbf{has\_repeated\_word}: ``The text contains a word repeated 4-5 times consecutively''
+    \item \textbf{contains\_rhyme}: ``The text contains multiple words that rhyme with each other''
+\end{enumerate}
+
+\subsection{Example few-shot prompt}
+
+For the \textit{ends\_with\_question} task with 5 shots:
+
+\begin{quote}
+\small
+\textit{Classify the following texts as true or false:}
+
+\textit{Text: ``Do you enjoy reading books?''}
+
+\textit{Label: true}
+
+\textit{Text: ``I love coffee in the morning''}
+
+\textit{Label: false}
+
+\textit{Text: ``Where are my keys?''}
+
+\textit{Label: true}
+
+\textit{Text: ``The weather is nice today''}
+
+\textit{Label: false}
+
+\textit{Text: ``Can you help me with this?''}
+
+\textit{Label: true}
+
+\textit{Text: ``The music festival was amazing''}
+
+\textit{Label: ?}
+\end{quote}
+
+\subsection{Example articulation prompt}
+
+After the model classifies the test example, we prompt (short version):
+
+\begin{quote}
+\small
+\textit{Explain what rule you used to classify this text. Provide a simple rule in one short sentence.}
+
+\textit{Example format: ``The input is labeled as 'true' if the input is all lowercase.''}
+
+\textit{Your rule:}
+\end{quote}
+
+\subsection{Example model articulations}
+
+For \textit{ends\_with\_question}:
+
+\begin{itemize}
+    \item \textbf{High similarity (0.95)}: ``The text is labeled true if it ends with a question mark.''
+    \item \textbf{Medium similarity (0.70)}: ``The text is true when it poses a question.''
+    \item \textbf{Lower similarity (0.50)}: ``The text is true if it seeks information or clarification from the reader.''
+\end{itemize}
+
+All three may achieve high usefulness if they correctly classify held-out examples. The lower-similarity one identifies a semantic pattern (information-seeking) that correlates with the true syntactic rule but isn't identical.
+
+For \textit{is\_first\_person}:
+
+\begin{itemize}
+    \item \textbf{High similarity (0.90)}: ``The text is true if it contains first-person pronouns like I, me, my, we, or our.''
+    \item \textbf{Medium similarity (0.65)}: ``The text is true if the speaker is talking about themselves.''
+\end{itemize}
+
+\subsection{Complete evaluation trace}
+
+Complete example for \textit{has\_repeated\_word} with 30 few-shot examples. The model correctly classifies and articulates, but lists specific words rather than the general rule.
+
+\begin{smallsystembox}
+You are a helpful assistant that classifies text. Answer only with 'true' or 'false' based on the examples provided.
+\end{smallsystembox}
+
+\begin{smalluserbox}
+Classify the provided text as true or false using the given examples as a guide; you'll have to figure out what classification rule is being used in the examples. Answer only with 'true' or 'false'.\\
+
+Text: The grandfather clock chimed twelve times as midnight approached, its brass pendulum swinging rhythmically while ornate hands marked another hour passing through time's endless journey.\\
+Answer: false\\
+
+Text: The symphony orchestra performed Beethoven's magnificent composition while the audience listened attentively to every melodic phrase echoing through the grand concert hall.\\
+Answer: false\\
+
+Text: Money money money money can dominate our thoughts when we're struggling to pay the bills.\\
+Answer: true\\
+
+Text: The autumn wind scattered golden leaves across the misty valley while distant thunder rumbled through darkening clouds.\\
+Answer: false\\
+
+Text: The aroma of freshly brewed coffee filled the entire kitchen, making everyone's morning morning morning morning start feel warm and inviting.\\
+Answer: true\\
+
+Text: The modern office layout includes collaborative workspaces, private meeting rooms, and ergonomic ergonomic ergonomic ergonomic desks designed for employee comfort and productivity.\\
+Answer: true\\
+
+Text: My favorite running shoes shoes shoes shoes have finally worn out after two years of daily use.\\
+Answer: true\\
+
+Text: Walking through the forest, I noticed colorful birds singing cheerfully above ancient oak trees swaying gently in the warm afternoon breeze.\\
+Answer: false\\
+
+Text: The bustling Italian restaurant serves delicious pasta dishes to hungry customers every evening throughout the week.\\
+Answer: false\\
+
+Text: The symphony orchestra performed magnificent classical compositions while enthusiastic audiences applauded their incredible talent during the evening concert.\\
+Answer: false\\
+
+Text: The antique grandfather clock chimed softly at midnight, its pendulum swinging rhythmically while brass gears turned beneath the ornate wooden case.\\
+Answer: false\\
+
+Text: The new office building downtown has updated updated updated updated conference rooms with state-of-the-art technology for all employees.\\
+Answer: true\\
+
+Text: The new Italian restaurant on Fifth Avenue serves serves serves serves the most authentic pasta dishes in the entire city.\\
+Answer: true\\
+
+Text: The new shopping mall has stores stores stores stores selling everything from electronics to handmade jewelry.\\
+Answer: true\\
+
+Text: Modern offices feature collaborative workspaces, ergonomic furniture, natural lighting, and advanced technology to enhance employee productivity and workplace satisfaction.\\
+Answer: false\\
+
+Text: Modern smartphones have become become become become essential tools for communication, navigation, and entertainment in our daily lives.\\
+Answer: true\\
+
+Text: The bustling Italian restaurant served delicious pasta dishes to hungry customers throughout the evening.\\
+Answer: false\\
+
+Text: The chef prepared delicious pasta with fresh tomatoes, fragrant basil, and aged parmesan cheese for tonight's dinner.\\
+Answer: false\\
+
+Text: Libraries provide access to books, magazines, research research research research materials, and digital resources for communities of all sizes.\\
+Answer: true\\
+
+Text: My sneakers are are are are so comfortable that I wear them every single day without fail.\\
+Answer: true\\
+
+Text: The ancient grandfather clock chimed midnight while digital timepieces displayed numbers across bedroom walls throughout the sleeping neighborhood.\\
+Answer: false\\
+
+Text: Money money money money can't buy happiness, but it certainly makes life's challenges easier to navigate.\\
+Answer: true\\
+
+Text: The secret to making perfectly caramelized onions is patience, patience, patience, patience, as rushing the process will only result in burnt, bitter vegetables.\\
+Answer: true\\
+
+Text: The aromatic coffee beans release their rich fragrance when freshly ground each morning.\\
+Answer: false\\
+
+Text: Modern smartphones combine communication capabilities with powerful computing features that enable users to browse websites, capture photographs, stream videos, and manage their daily schedules efficiently.\\
+Answer: false\\
+
+Text: The secret to perfect pasta is using salt salt salt salt in the boiling water to enhance the flavor.\\
+Answer: true\\
+
+Text: The librarian shelved books books books books in alphabetical order, organizing the mystery section before closing time.\\
+Answer: true\\
+
+Text: After staying awake for twenty-four hours, she finally collapsed into bed and fell into a deep deep deep deep sleep that lasted until noon the next day.\\
+Answer: true\\
+
+Text: Libraries preserve knowledge through carefully curated collections that serve communities by providing access to books, digital resources, and educational programs for everyone.\\
+Answer: false\\
+
+Text: The experienced driver carefully navigated through heavy traffic while maintaining a safe distance from other vehicles on the highway.\\
+Answer: false\\
+
+Text: The secret to making the perfect sauce is to stir stir stir stir constantly while it simmers on low heat.\\
+Answer:
+\end{smalluserbox}
+
+\begin{smallassistantbox}
+true
+\end{smallassistantbox}
+
+\begin{smalluserbox}
+Explain what rule you used to classify this text. Provide a simple rule in one short sentence.\\
+
+Example format: "The input is labeled as 'true' if the input is all lowercase."\\
+
+Your rule:
+\end{smalluserbox}
+
+\begin{smallassistantbox}
+The input is labeled as 'true' if the word ``money'' or ``shoes'' or ``library'' or ``patience'' or ``salt'' is repeated four or more times consecutively.
+\end{smallassistantbox}
+
+\subsubsection{Scoring}
+
+\textbf{Classification accuracy}: Correct (C).
+
+\textbf{Similarity}: 0.2. Lists specific words instead of the general pattern, and says ``four or more'' instead of ``4-5 times.''
+
+\textbf{Usefulness}: 0.4 (4/10 correct).
+
+\textbf{Faithfulness}: 0.7 (7/10 faithful). The 3 failures were on edge cases.
+
 \section{Additional Results}
+
+Per-rule breakdowns of metrics from the main text.
+
+\subsection{In-Context Learning by Rule}
 
 \begin{figure}[htp]
     \centering
     \includegraphics[width=0.8\textwidth]{icl_by_rule.png}
-    \caption{ICL by Rule (traces for each n\_shots; for each model)}
+    \caption{In-context classification accuracy by rule. Some rules (e.g., \textit{ends\_with\_question}, \textit{contains\_numbers}) are easier to learn than others (e.g., \textit{contains\_rhyme}, \textit{has\_many\_verbs}).}
     \label{fig:icl_by_rule}
 \end{figure}
+
+\subsection{Articulation Metrics by Rule}
+
+Similarity and usefulness scores by classification rule.
 
 \begin{figure}[htp]
     \centering
     \includegraphics[width=0.8\textwidth]{articulation_free_similarity_by_rule.png}
-    \caption{Similarity by Rule (short free)}
+    \caption{Articulation \textit{similarity} broken down by classification rule across models and shot counts. Rules with clear syntactic patterns (e.g., \textit{ends\_with\_question}, \textit{contains\_numbers}) generally achieve higher similarity scores, while more subjective rules (e.g., \textit{contains\_rhyme}, \textit{has\_many\_verbs}) show lower semantic alignment with ground-truth descriptions.}
     \label{fig:similarity_by_rule}
 \end{figure}
 
 \begin{figure}[htp]
     \centering
     \includegraphics[width=0.8\textwidth]{articulation_free_usefulness_by_rule.png}
-    \caption{Usefulness by Rule (short free)}
+    \caption{Articulation \textit{usefulness} broken down by classification rule across models and shot counts. Most rules show high usefulness scores when classification accuracy is high, indicating that articulations tend to be practically applicable even when they may not perfectly match ground-truth descriptions semantically.}
     \label{fig:usefulness_by_rule}
 \end{figure}
+
+\subsection{Faithfulness by Rule}
+
+Faithfulness scores by classification rule.
 
 \begin{figure}[htp]
     \centering
     \includegraphics[width=0.8\textwidth]{articulation_free_faithfulness_by_rule.png}
-    \caption{Faithfulness by Rule (short free)}
+    \caption{Articulation \textit{faithfulness} broken down by classification rule across models and shot counts. Faithfulness varies considerably by rule, with simpler syntactic rules showing higher consistency between articulations and behavior, while more complex semantic rules exhibit greater variability in faithfulness scores.}
     \label{fig:faithfulness_by_rule}
 \end{figure}
-
-% Note: Example Trace figure not found in the uploaded files
 
 \end{document}

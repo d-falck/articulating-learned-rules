@@ -1,3 +1,3 @@
 #!/bin/bash
 
-uv run -m astra.run.evaluate --config etc/evaluate_base.yaml --articulation free --free-articulation-prompt short --cot --run-name "articulation_free_short_cot"
+uv run -m astra.run.evaluate --config etc/evaluate_base_mini.yaml --articulation free --free-articulation-prompt medium --run-name "articulation_free_med"

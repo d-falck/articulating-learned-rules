@@ -45,8 +45,9 @@ from datasets import load_dataset
 from dotenv import load_dotenv
 from inspect_ai import Task, eval, task
 from inspect_ai.dataset import MemoryDataset, Sample
-from inspect_ai.solver import generate, system_message
-from inspect_ai.model import GenerateConfig
+from inspect_ai.solver import generate, system_message, solver
+from inspect_ai.model import GenerateConfig, ChatMessageAssistant
+import re
 from pydantic import Field
 
 from astra.evaluate import (
@@ -106,12 +107,22 @@ def split_dataset(dataset, rule, n_test):
     return train_dataset, test_dataset
 
 
-def create_few_shot_prompt(rule, examples, test_text):
+def create_few_shot_prompt(rule, examples, test_text, cot=False):
     """Create a prompt with few-shot examples for classification."""
-    prompt_parts = [
-        "Classify the provided text as true or false using the given examples as a guide; you'll have to figure out what classification rule is being used in the examples. Answer only with 'true' or 'false'.",
-        "",
-    ]
+    if cot:
+        prompt_parts = [
+            "Classify the provided text as true or false using the given examples as a guide; you'll have to figure out what classification rule is being used in the examples.",
+            "Think step by step about the pattern in the examples, then provide your final answer.",
+            "Format your response as:",
+            "Reasoning: <your step-by-step thinking>",
+            "Final Answer: <true or false>",
+            "",
+        ]
+    else:
+        prompt_parts = [
+            "Classify the provided text as true or false using the given examples as a guide; you'll have to figure out what classification rule is being used in the examples. Answer only with 'true' or 'false'.",
+            "",
+        ]
 
     for example in examples:
         text = example["text"]
@@ -121,9 +132,72 @@ def create_few_shot_prompt(rule, examples, test_text):
         prompt_parts.append("")
 
     prompt_parts.append(f"Text: {test_text}")
-    prompt_parts.append("Answer:")
+    if cot:
+        prompt_parts.append("Reasoning:")
+    else:
+        prompt_parts.append("Answer:")
 
     return "\n".join(prompt_parts)
+
+
+@solver
+def extract_cot_answer():
+    """
+    Solver that extracts the final answer from chain-of-thought reasoning.
+
+    Looks for patterns like "Final Answer: true" or "Final Answer: false"
+    and replaces the assistant's message with just the extracted answer.
+    """
+    async def solve(state, generate):
+        # Get the last assistant message
+        last_message = None
+        for message in reversed(state.messages):
+            if isinstance(message, ChatMessageAssistant):
+                last_message = message
+                break
+
+        if not last_message:
+            return state
+
+        content = last_message.content
+
+        # Try to extract final answer using regex patterns
+        # Look for "Final Answer: <answer>" pattern
+        patterns = [
+            r"Final Answer:\s*(true|false)",
+            r"final answer:\s*(true|false)",
+            r"Answer:\s*(true|false)",
+            r"answer:\s*(true|false)",
+        ]
+
+        extracted_answer = None
+        for pattern in patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                extracted_answer = match.group(1).lower()
+                break
+
+        # If we couldn't extract an answer, try to find "true" or "false" at the end
+        if not extracted_answer:
+            # Look for true/false in the last line or at the end
+            lines = content.strip().split('\n')
+            for line in reversed(lines):
+                line_lower = line.lower().strip()
+                if 'true' in line_lower and 'false' not in line_lower:
+                    extracted_answer = 'true'
+                    break
+                elif 'false' in line_lower and 'true' not in line_lower:
+                    extracted_answer = 'false'
+                    break
+
+        # Replace the message content with just the extracted answer
+        if extracted_answer:
+            # Update the last assistant message to contain only the extracted answer
+            state.messages[-1] = ChatMessageAssistant(content=extracted_answer)
+
+        return state
+
+    return solve
 
 
 def create_evaluation_samples(
@@ -133,6 +207,7 @@ def create_evaluation_samples(
     n_shot,
     articulation_type="none",
     n_articulation_scoring_examples=10,
+    cot=False,
 ):
     """
     Create evaluation samples by sampling few-shot examples from train and test cases from test.
@@ -144,6 +219,7 @@ def create_evaluation_samples(
         n_shot: Number of few-shot examples per class (total examples = 2 * n_shot)
         articulation_type: "none", "multi", or "free"
         n_articulation_scoring_examples: Number of held-out test examples for scoring articulation
+        cot: Whether to use chain-of-thought prompting
     """
     train_true = [ex for ex in train_dataset if ex[rule] is True]
     train_false = [ex for ex in train_dataset if ex[rule] is False]
@@ -165,7 +241,7 @@ def create_evaluation_samples(
         few_shot_examples = true_samples + false_samples
         random.shuffle(few_shot_examples)
 
-        prompt = create_few_shot_prompt(rule, few_shot_examples, test_example["text"])
+        prompt = create_few_shot_prompt(rule, few_shot_examples, test_example["text"], cot=cot)
 
         metadata = {
             "rule": rule,
@@ -216,6 +292,7 @@ def evaluate_icl_task(
     n_articulation_scoring_examples=10,
     faithfulness_check=False,
     n_faithfulness_examples=10,
+    cot=False,
 ):
     """Evaluate in-context learning for a specific classification rule with optional articulation."""
     dataset = load_classification_dataset(rule)
@@ -231,18 +308,29 @@ def evaluate_icl_task(
         n_shot,
         articulation_type,
         n_articulation_scoring_examples,
+        cot,
     )
     print(
         f"Created {len(samples)} test samples with {2 * n_shot} few-shot examples ({n_shot} per class)"
     )
 
-    solvers = [
-        system_message(
-            "You are a helpful assistant that classifies text. "
-            "Answer only with 'true' or 'false' based on the examples provided."
-        ),
-        generate(config=GenerateConfig(extra_body={"reasoning": {"enabled": False}})),
-    ]
+    if cot:
+        solvers = [
+            system_message(
+                "You are a helpful assistant that classifies text. "
+                "Think step by step and provide your reasoning before giving your final answer."
+            ),
+            generate(config=GenerateConfig(extra_body={"reasoning": {"enabled": False}})),
+            extract_cot_answer(),
+        ]
+    else:
+        solvers = [
+            system_message(
+                "You are a helpful assistant that classifies text. "
+                "Answer only with 'true' or 'false' based on the examples provided."
+            ),
+            generate(config=GenerateConfig(extra_body={"reasoning": {"enabled": False}})),
+        ]
 
     if articulation_type in ["multi", "free"]:
         mc_opts = (
@@ -290,6 +378,7 @@ def evaluate_icl_task(
             "n_articulation_scoring_examples": n_articulation_scoring_examples,
             "faithfulness_check": faithfulness_check,
             "n_faithfulness_examples": n_faithfulness_examples,
+            "cot": cot,
         },
     )
 
@@ -333,8 +422,8 @@ class Config(BaseConfig):
     max_tasks: int = Field(
         default=5, description="Maximum number of tasks to run in parallel"
     )
-    max_connections: int = Field(
-        default=500, description="Maximum number of connections to use for evaluation"
+    max_connections: int | None = Field(
+        default=None, description="Maximum number of connections to use for evaluation"
     )
     run_name: str | None = Field(
         default=None,
@@ -349,8 +438,6 @@ class Config(BaseConfig):
 def main(config: Config):
     """Run ICL evaluation with the given configuration."""
     random.seed(config.seed)
-
-    assert not config.cot, "CoT is not supported yet"
 
     # Create unique run directory
     if config.run_name:
@@ -399,6 +486,7 @@ def main(config: Config):
                     config.n_articulation_scoring_examples,
                     config.faithfulness_check,
                     config.n_faithfulness_examples,
+                    config.cot,
                 )
             )
 
@@ -408,7 +496,7 @@ def main(config: Config):
         log_dir=str(run_log_dir),
         max_connections=config.max_connections,
         max_tasks=config.max_tasks,
-        reasoning_tokens=0,
+        # reasoning_tokens=0,
     )
 
     print(f"\n{'='*80}")

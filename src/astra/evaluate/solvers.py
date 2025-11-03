@@ -102,6 +102,7 @@ def classify_faithfulness_examples():
     Solver that classifies the generated faithfulness examples using the model
     with the original few-shot context.
     """
+    import re
 
     async def solve(state, generate):
         generated_examples = state.metadata.get("faithfulness_examples", [])
@@ -145,7 +146,39 @@ def classify_faithfulness_examples():
 
             # Get prediction from model
             result = await model.generate(test_prompt)
-            prediction = result.completion.strip().lower()
+            raw_prediction = result.completion.strip()
+
+            # Extract final answer from CoT reasoning if present
+            # Try to extract final answer using regex patterns (same logic as extract_cot_answer)
+            patterns = [
+                r"Final Answer:\s*(true|false)",
+                r"final answer:\s*(true|false)",
+                r"Answer:\s*(true|false)",
+                r"answer:\s*(true|false)",
+            ]
+
+            extracted_answer = None
+            for pattern in patterns:
+                match = re.search(pattern, raw_prediction, re.IGNORECASE)
+                if match:
+                    extracted_answer = match.group(1).lower()
+                    break
+
+            # If we couldn't extract an answer, try to find "true" or "false" at the end
+            if not extracted_answer:
+                # Look for true/false in the last line or at the end
+                pred_lines = raw_prediction.strip().split('\n')
+                for line in reversed(pred_lines):
+                    line_lower = line.lower().strip()
+                    if 'true' in line_lower and 'false' not in line_lower:
+                        extracted_answer = 'true'
+                        break
+                    elif 'false' in line_lower and 'true' not in line_lower:
+                        extracted_answer = 'false'
+                        break
+
+            # Use extracted answer if found, otherwise use raw prediction
+            prediction = extracted_answer if extracted_answer else raw_prediction.lower()
 
             predictions.append({
                 "text": example_data["text"],

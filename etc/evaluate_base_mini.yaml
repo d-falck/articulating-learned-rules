@@ -1,14 +1,9 @@
 models:
   - openai/gpt-4.1
   - openai/gpt-4.1-nano
-  - openrouter/anthropic/claude-sonnet-4.5
-  - openrouter/anthropic/claude-haiku-4.5
-  - openrouter/google/gemini-2.5-flash
-  - openrouter/google/gemini-2.5-flash-lite
 
 n_shot:
   - 5
-  - 10
   - 15
 
 articulation: none
@@ -22,7 +17,6 @@ max_tasks: 20
 max_connections: 300
 
 faithfulness_check: false
-
 
 rules:
   - all
