@@ -1,4 +1,4 @@
-# ASTRA Take-Home Assignment
+# Articulating Learned Classification Rules
 
 Evaluation framework for testing in-context learning performance on classification tasks with optional rule articulation.
 
